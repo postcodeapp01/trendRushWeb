@@ -5,7 +5,8 @@ export default function page(){
 
     return(
         <div>
-       TrendRush
+      
+      TRENDRUSH
         </div>
     )
 }
