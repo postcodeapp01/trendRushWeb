@@ -1,133 +1,164 @@
 "use client";
-
-import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import GenericForm, { FieldConfig } from "@/components/generic/GenericForm";
-import { apiUrls } from "@/utils/Api";
+import { useState } from "react";
 
-export default function SignUp() {
+export default function SignupPage() {
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [needsProfile, setNeedsProfile] = useState(false);
+  const [name, setName] = useState("");
+  const [extraPhone, setExtraPhone] = useState("");
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-
-  const fields: FieldConfig[] = [
-    {
-      name: "username",
-      label: "Username",
-      placeholder: "Enter your username",
-      type: "text",
-      required: true,
-    },
-    {
-      name: "email",
-      label: "Email",
-      placeholder: "Enter your email",
-      type: "text",
-      required: true,
-    },
-    {
-      name: "password",
-      label: "Password",
-      placeholder: "Enter your password",
-      type: "text",
-      required: true,
-    },
-    {
-      name: "confirmPassword",
-      label: "Confirm Password",
-      placeholder: "Confirm your password",
-      type: "text",
-      required: true,
-    },
-  ];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-    setSuccess("");
-
-    if (formData.password !== formData.confirmPassword) {
-      setErrors({ confirmPassword: "Passwords do not match" });
-      return;
-    }
-
-    setLoading(true);
+  const handleSendOtp = async () => {
     try {
-      const res = await fetch(apiUrls.register, {
+      const response = await fetch("http://localhost:3000/user/auth/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email || null, phone: phone || null }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setOtpSent(true);
+        alert("OTP sent successfully");
+      } else {
+        alert(data.message || "Failed to send OTP");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/user/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
+          email: email || null,
+          phone: phone || null,
+          code: otp,
         }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        setErrors({ email: errorData.message || "Registration failed" });
-        return;
+      const data = await response.json();
+      if (response.ok) {
+        if (data.statusCode === 200) {
+          // ✅ User exists → go home
+          router.push("/home");
+        } else if (data.statusCode === 206) {
+          // ✅ New user → needs name & phone
+          setNeedsProfile(true);
+        }
+      } else {
+        alert(data.message || "OTP verification failed");
       }
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
+    }
+  };
 
-      setSuccess("Registration Successful! Redirecting...");
-      setTimeout(() => router.push("/login"), 1500);
-    } catch (err: any) {
-      setErrors({ email: err.message });
-    } finally {
-      setLoading(false);
+  const handleCompleteProfile = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/user/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          phone: extraPhone,
+          name,
+          code: otp, // reuse same OTP
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.statusCode === 200) {
+        router.push("/home");
+      } else {
+        alert(data.message || "Failed to complete profile");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white to-gray-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-8">
-        {/* Logo */}
-        <div className="text-center mb-6">
-          <h1 className="text-4xl font-extrabold text-gray-900">
-            Trend<span className="text-purple-600">Rush</span>.
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Create your account</p>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+      {!otpSent ? (
+        // Step 1: Email/Phone input
+        <div className="bg-white shadow-lg rounded-lg p-8 w-96">
+          <h2 className="text-2xl font-bold mb-4">Signup / Login</h2>
+          <input
+            type="email"
+            placeholder="Email (or leave empty if using phone)"
+            className="border p-2 w-full mb-3"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            type="tel"
+            placeholder="Phone (or leave empty if using email)"
+            className="border p-2 w-full mb-3"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <button
+            onClick={handleSendOtp}
+            className="bg-blue-500 text-white py-2 px-4 rounded w-full"
+          >
+            Send OTP
+          </button>
         </div>
-
-        {/* Form */}
-        <GenericForm
-          title=""
-          fields={fields}
-          formData={formData}
-          setFormData={setFormData}
-          onSubmit={handleSubmit}
-          showBackButton={false}
-          showSaveButton={!loading}
-          showCancelButton={false}
-          gridCols={1}
-          errors={errors}
-        />
-
-        {/* Login Link */}
-        <button
-          onClick={() => router.push("/login")}
-          className="mt-6 w-full text-sm text-center text-gray-600 hover:text-purple-600 transition"
-        >
-          Already have an account? <span className="font-medium underline">Login</span>
-        </button>
-
-        {/* Status Messages */}
-        {loading && (
-          <p className="text-center text-purple-600 text-sm mt-4">Registering...</p>
-        )}
-        {success && (
-          <p className="text-center text-green-600 text-sm mt-4">{success}</p>
-        )}
-      </div>
+      ) : !needsProfile ? (
+        // Step 2: OTP input
+        <div className="bg-white shadow-lg rounded-lg p-8 w-96">
+          <h2 className="text-2xl font-bold mb-4">Enter OTP</h2>
+          <input
+            type="text"
+            placeholder="OTP"
+            className="border p-2 w-full mb-3"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+          />
+          <button
+            onClick={handleVerifyOtp}
+            className="bg-green-500 text-white py-2 px-4 rounded w-full"
+          >
+            Verify
+          </button>
+        </div>
+      ) : (
+        // Step 3: Complete profile
+        <div className="bg-white shadow-lg rounded-lg p-8 w-96">
+          <h2 className="text-2xl font-bold mb-4">Complete Your Profile</h2>
+          <input
+            type="text"
+            placeholder="Full Name"
+            className="border p-2 w-full mb-3"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <input
+            type="tel"
+            placeholder="Mobile Number"
+            className="border p-2 w-full mb-3"
+            value={extraPhone}
+            onChange={(e) => setExtraPhone(e.target.value)}
+          />
+          <button
+            onClick={handleCompleteProfile}
+            className="bg-blue-600 text-white py-2 px-4 rounded w-full"
+          >
+            Save & Continue
+          </button>
+        </div>
+      )}
     </div>
   );
 }
